@@ -715,6 +715,12 @@ const GEMINI_KEY = 'AIzaSyArh2tSLYt9zRUsAnioxgn-uBBpcdxVI8w';
 const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + GEMINI_KEY;
 
 // ── ユーティリティ ─────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s ?? '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#x27;');
+}
+
 function todayKey() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -838,11 +844,11 @@ function renderHome() {
     <div class="meal-item" data-index="${i}">
       <div class="drag-handle">⠿</div>
       <div class="meal-thumb">
-        ${m.photo ? `<img src="${m.photo}">` : m.emoji || '🍽'}
+        ${m.photo ? `<img src="${m.photo}">` : esc(m.emoji) || '🍽'}
       </div>
       <div class="meal-info">
-        <div class="meal-name">${m.name}</div>
-        <div class="meal-meta"><span class="timing-badge timing-${m.timing}">${m.timing}</span>${m.cal || 0}kcal</div>
+        <div class="meal-name">${esc(m.name)}</div>
+        <div class="meal-meta"><span class="timing-badge timing-${esc(m.timing)}">${esc(m.timing)}</span>${m.cal || 0}kcal</div>
       </div>
       <div class="meal-carb">糖質 ${Math.round(m.carb || 0)}g</div>
       <div style="display:flex;gap:2px;margin-left:4px">
@@ -1072,7 +1078,7 @@ function renderHistory(period) {
       const meals = getMeals(key);
       const carb = meals.reduce((s, m) => s + (m.carb || 0), 0);
       const cal  = meals.reduce((s, m) => s + (m.cal  || 0), 0);
-      const names = meals.map(m => m.name).join('、') || '—';
+      const names = meals.map(m => esc(m.name)).join('、') || '—';
       dailyData.push({ key, date: new Date(d), carb: Math.round(carb), cal: Math.round(cal), names });
     }
   } else {
@@ -1084,7 +1090,7 @@ function renderHistory(period) {
       const meals = getMeals(key);
       const carb = meals.reduce((s, m) => s + (m.carb || 0), 0);
       const cal  = meals.reduce((s, m) => s + (m.cal  || 0), 0);
-      const names = meals.map(m => m.name).join('、') || '—';
+      const names = meals.map(m => esc(m.name)).join('、') || '—';
       dailyData.push({ key, date: new Date(d), carb: Math.round(carb), cal: Math.round(cal), names });
     }
   }
@@ -1347,12 +1353,12 @@ function openHistModal(dateKey) {
       ${meals.map((m, i) => `
         <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f0f0ee">
           <div style="width:40px;height:40px;border-radius:10px;background:#f0f0ee;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;overflow:hidden">
-            ${m.photo ? `<img src="${m.photo}" style="width:100%;height:100%;object-fit:cover">` : (m.emoji || '🍽')}
+            ${m.photo ? `<img src="${m.photo}" style="width:100%;height:100%;object-fit:cover">` : (esc(m.emoji) || '🍽')}
           </div>
           <div style="flex:1;min-width:0">
-            <div style="font-size:13px;font-weight:500;color:#1c1c1c;margin-bottom:3px">${m.name}</div>
+            <div style="font-size:13px;font-weight:500;color:#1c1c1c;margin-bottom:3px">${esc(m.name)}</div>
             <div style="font-size:10px;color:#aaa">
-              <span class="timing-badge timing-${m.timing}" style="font-size:9px;padding:1px 6px">${m.timing}</span>
+              <span class="timing-badge timing-${esc(m.timing)}" style="font-size:9px;padding:1px 6px">${esc(m.timing)}</span>
               糖質 ${Math.round(m.carb||0)}g &nbsp;·&nbsp; ${Math.round(m.cal||0)}kcal &nbsp;·&nbsp; タンパク質 ${Math.round(m.protein||0)}g
             </div>
           </div>
