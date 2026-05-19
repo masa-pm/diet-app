@@ -20,6 +20,8 @@ firebase.initializeApp({
 });
 const _db = firebase.firestore();
 </script>
+<!-- SortableJS -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#3D6B54">
@@ -264,6 +266,31 @@ textarea.form-input { resize: none; height: 72px; line-height: 1.6; }
 }
 .set-input:focus { border-color: var(--accent); }
 
+/* ── Drag handle ── */
+.drag-handle {
+  color: #ccc; font-size: 18px; cursor: grab; padding: 4px 2px; flex-shrink: 0;
+  touch-action: none; user-select: none;
+}
+.drag-handle:active { cursor: grabbing; }
+.sortable-ghost { opacity: 0.4; background: #f0f0ee !important; }
+
+/* ── AI Advice card ── */
+.advice-btn {
+  width: 100%; padding: 12px; border-radius: 12px; border: 1.5px solid var(--accent);
+  background: #fff; color: var(--accent);
+  font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  transition: background .15s;
+}
+.advice-btn:active { background: var(--accent-light); }
+.advice-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.advice-result {
+  margin-top: 12px; background: var(--accent-light);
+  border-radius: 12px; padding: 12px 14px;
+  font-size: 12px; color: #333; line-height: 1.8;
+  border: 1px solid #C8E6C9; white-space: pre-wrap;
+}
+
 /* ── Loading spinner ── */
 .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid rgba(255,255,255,0.4); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -401,6 +428,17 @@ textarea.form-input { resize: none; height: 72px; line-height: 1.6; }
         <div class="card-hdr">今日の食事</div>
         <div class="card-body" id="home-meal-list">
           <div class="empty-state"><div class="empty-ico">🍽</div>まだ記録がありません</div>
+        </div>
+      </div>
+
+      <!-- AIアドバイス -->
+      <div class="card" id="advice-card" style="display:none">
+        <div class="card-hdr">AIアドバイス</div>
+        <div class="card-body">
+          <button class="advice-btn" id="advice-btn" onclick="getAdvice()">
+            ✨ この後の食事を提案する
+          </button>
+          <div class="advice-result" id="advice-result" style="display:none"></div>
         </div>
       </div>
 
@@ -791,12 +829,14 @@ function renderHome() {
 
   // 食事リスト
   const list = document.getElementById('home-meal-list');
+  document.getElementById('advice-card').style.display = meals.length > 0 ? 'block' : 'none';
   if (meals.length === 0) {
     list.innerHTML = '<div class="empty-state"><div class="empty-ico">🍽</div>まだ記録がありません</div>';
     return;
   }
   list.innerHTML = meals.map((m, i) => `
-    <div class="meal-item">
+    <div class="meal-item" data-index="${i}">
+      <div class="drag-handle">⠿</div>
       <div class="meal-thumb">
         ${m.photo ? `<img src="${m.photo}">` : m.emoji || '🍽'}
       </div>
@@ -811,6 +851,67 @@ function renderHome() {
       </div>
     </div>
   `).join('');
+
+  // ドラッグ並び替え
+  if (window._homeSortable) window._homeSortable.destroy();
+  window._homeSortable = Sortable.create(list, {
+    handle: '.drag-handle',
+    animation: 150,
+    ghostClass: 'sortable-ghost',
+    onEnd(evt) {
+      const meals = getMeals(key);
+      const [moved] = meals.splice(evt.oldIndex, 1);
+      meals.splice(evt.newIndex, 0, moved);
+      saveMealsLocal(key, meals);
+    }
+  });
+}
+
+// ── AIアドバイス ───────────────────────────────────────────────────────────────
+async function getAdvice() {
+  const key = todayKey();
+  const meals = getMeals(key);
+  if (meals.length === 0) return;
+
+  const btn = document.getElementById('advice-btn');
+  const result = document.getElementById('advice-result');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner" style="border-color:rgba(61,107,84,0.3);border-top-color:var(--accent)"></div> 生成中…';
+  result.style.display = 'none';
+
+  try {
+    const summary = meals.map(m =>
+      `・${m.timing}「${m.name}」糖質${Math.round(m.carb||0)}g タンパク質${Math.round(m.protein||0)}g 脂質${Math.round(m.fat||0)}g ${Math.round(m.cal||0)}kcal`
+    ).join('\n');
+    const goals = getGoals();
+    const prompt = `あなたは管理栄養士です。今日の食事記録と目標をもとに、この後の食事へのアドバイスと具体的な食事候補を提案してください。
+
+【今日の目標】糖質${goals.carb}g以内、カロリー${goals.cal}kcal以内
+
+【今日の食事記録】
+${summary}
+
+以下の形式で簡潔に日本語で回答してください：
+■ アドバイス（2〜3文）
+■ おすすめの食事候補（3つ、各1行で料理名と理由を記載）`;
+
+    const res = await fetch(GEMINI_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+    });
+    if (!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || 'アドバイスを取得できませんでした。';
+    result.textContent = text;
+    result.style.display = 'block';
+  } catch (e) {
+    result.textContent = 'エラーが発生しました: ' + e.message;
+    result.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '✨ この後の食事を提案する';
+  }
 }
 
 // ── 写真選択 ───────────────────────────────────────────────────────────────────
