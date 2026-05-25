@@ -716,7 +716,7 @@ textarea.form-input { resize: none; height: 72px; line-height: 1.6; }
 <script>
 // ── 定数 ──────────────────────────────────────────────────────────────────────
 const GEMINI_KEY = '__GEMINI_KEY__';
-const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + GEMINI_KEY;
+const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=' + GEMINI_KEY;
 
 // ── ユーティリティ ─────────────────────────────────────────────────────────────
 function esc(s) {
@@ -908,7 +908,10 @@ ${summary}
     const res = await fetch(GEMINI_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { maxOutputTokens: 512, thinkingConfig: { thinkingBudget: 0 } },
+      })
     });
     if (!res.ok) throw new Error(res.status);
     const data = await res.json();
@@ -981,13 +984,11 @@ ${_photoBase64 ? '（画像の料理を認識して分析してください）' 
 }`;
     parts.push({ text: prompt });
 
-    const body = JSON.stringify({ contents: [{ parts }] });
-    let res;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      if (attempt > 0) await new Promise(r => setTimeout(r, 1500 * attempt));
-      res = await fetch(GEMINI_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
-      if (res.ok || res.status === 400 || res.status === 429) break;
-    }
+    const body = JSON.stringify({
+      contents: [{ parts }],
+      generationConfig: { maxOutputTokens: 256, thinkingConfig: { thinkingBudget: 0 } },
+    });
+    const res = await fetch(GEMINI_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
     if (!res.ok) throw new Error('Gemini API error: ' + res.status);
     const data = await res.json();
     const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
