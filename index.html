@@ -262,7 +262,20 @@ textarea.form-input { resize: none; height: 72px; line-height: 1.6; }
   display: flex; align-items: center; justify-content: center;
   opacity: 0; transition: opacity .15s;
 }
-.fav-card:hover .fav-del { opacity: 1; }
+.fav-edit-btn {
+  position: absolute; top: -5px; left: -5px;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: #607D8B; color: #fff; border: none;
+  font-size: 9px; line-height: 1; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; transition: opacity .15s;
+}
+.fav-card:hover .fav-del,
+.fav-card:hover .fav-edit-btn { opacity: 1; }
+/* スマホ：常に薄く表示 */
+@media (hover: none) {
+  .fav-del, .fav-edit-btn { opacity: 0.5; }
+}
 .fav-empty { font-size: 12px; color: #ccc; padding: 8px 0; }
 .fav-add-btn {
   width: 100%; margin-top: 8px; padding: 10px; border-radius: 10px;
@@ -739,6 +752,24 @@ textarea.form-input { resize: none; height: 72px; line-height: 1.6; }
   </div>
 
   <!-- ── 編集モーダル ── -->
+  <!-- お気に入り編集モーダル -->
+  <div id="fav-edit-modal" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,0.45);z-index:500;align-items:flex-end" onclick="if(event.target===this)closeFavEditModal()">
+    <div style="background:#fff;border-radius:20px 20px 0 0;padding:20px 16px 32px;width:100%">
+      <div style="font-size:14px;font-weight:700;color:#1c1c1c;margin-bottom:16px" id="fav-edit-title">お気に入りを編集</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
+        <div><div class="form-label">糖質 (g)</div><input class="form-input" type="number" id="fav-edit-carb" style="margin-bottom:0"></div>
+        <div><div class="form-label">カロリー (kcal)</div><input class="form-input" type="number" id="fav-edit-cal" style="margin-bottom:0"></div>
+        <div><div class="form-label">タンパク質 (g)</div><input class="form-input" type="number" id="fav-edit-protein" style="margin-bottom:0"></div>
+        <div><div class="form-label">脂質 (g)</div><input class="form-input" type="number" id="fav-edit-fat" style="margin-bottom:0"></div>
+        <div><div class="form-label">食物繊維 (g)</div><input class="form-input" type="number" id="fav-edit-fiber" style="margin-bottom:0"></div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="closeFavEditModal()" style="flex:1;padding:12px;border-radius:10px;border:1px solid #e0e0e0;background:none;font-family:inherit;font-size:14px;cursor:pointer">キャンセル</button>
+        <button onclick="saveFavEdit()" style="flex:2;padding:12px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer">保存</button>
+      </div>
+    </div>
+  </div>
+
   <div id="edit-modal" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,0.45);z-index:500;align-items:flex-end">
     <div style="background:#fff;border-radius:20px 20px 0 0;padding:20px 16px 32px;width:100%">
       <div style="font-size:14px;font-weight:700;color:#1c1c1c;margin-bottom:16px" id="edit-modal-title">食事を編集</div>
@@ -836,6 +867,7 @@ function renderFavorites() {
       <div class="fav-name">${esc(f.name)}</div>
       <div class="fav-cal">${Math.round(f.cal)}kcal</div>
       <button class="fav-del" onclick="event.stopPropagation();deleteFavorite(${i})">✕</button>
+      <button class="fav-edit-btn" onclick="event.stopPropagation();openFavEditModal(${i})">✏️</button>
     </div>
   `).join('');
 }
@@ -891,6 +923,39 @@ function deleteFavorite(idx) {
   favs.splice(idx, 1);
   saveFavorites(favs);
   renderFavorites();
+}
+
+let _editFavIdx = -1;
+function openFavEditModal(idx) {
+  const favs = getFavorites();
+  const f = favs[idx];
+  if (!f) return;
+  _editFavIdx = idx;
+  document.getElementById('fav-edit-title').textContent = (f.emoji || '🍽️') + ' ' + f.name;
+  document.getElementById('fav-edit-carb').value    = f.carb    ?? 0;
+  document.getElementById('fav-edit-cal').value     = f.cal     ?? 0;
+  document.getElementById('fav-edit-protein').value = f.protein ?? 0;
+  document.getElementById('fav-edit-fat').value     = f.fat     ?? 0;
+  document.getElementById('fav-edit-fiber').value   = f.fiber   ?? 0;
+  document.getElementById('fav-edit-modal').style.display = 'flex';
+}
+function closeFavEditModal() {
+  document.getElementById('fav-edit-modal').style.display = 'none';
+  _editFavIdx = -1;
+}
+function saveFavEdit() {
+  if (_editFavIdx < 0) return;
+  const favs = getFavorites();
+  const f = favs[_editFavIdx];
+  if (!f) return;
+  f.carb    = parseFloat(document.getElementById('fav-edit-carb').value)    || 0;
+  f.cal     = parseFloat(document.getElementById('fav-edit-cal').value)     || 0;
+  f.protein = parseFloat(document.getElementById('fav-edit-protein').value) || 0;
+  f.fat     = parseFloat(document.getElementById('fav-edit-fat').value)     || 0;
+  f.fiber   = parseFloat(document.getElementById('fav-edit-fiber').value)   || 0;
+  saveFavorites(favs);
+  renderFavorites();
+  closeFavEditModal();
 }
 
 // ── 画面切替 ───────────────────────────────────────────────────────────────────
