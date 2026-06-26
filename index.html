@@ -617,7 +617,13 @@ textarea.form-input { resize: none; height: 72px; line-height: 1.6; }
       </div>
 
       <div class="card">
-        <div class="card-hdr" id="hist-list-hdr">日別ログ</div>
+        <div class="card-hdr" id="hist-list-hdr">
+          <span id="hist-list-hdr-text">日別ログ</span>
+          <button onclick="copyHistLog()" id="copy-log-btn"
+            style="font-size:10px;padding:3px 10px;border-radius:12px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.07);color:#ccc;cursor:pointer;letter-spacing:0;text-transform:none;font-weight:500">
+            コピー
+          </button>
+        </div>
         <div id="hist-list"></div>
       </div>
 
@@ -1253,6 +1259,59 @@ function setPeriod(period, el) {
   renderHistory(period);
 }
 
+function copyHistLog() {
+  const period = _currentPeriod;
+  const goals  = getGoals();
+  const DAYS   = { week: 7, month: 30, '3month': 90 };
+  const LABEL  = { week: '直近7日間', month: '直近30日間', '3month': '直近3ヶ月', all: '全期間' };
+  const W      = ['日','月','火','水','木','金','土'];
+
+  const dateKeys = [];
+  if (period === 'all') {
+    const keys = Object.keys(localStorage)
+      .filter(k => k.startsWith('meals_'))
+      .map(k => k.replace('meals_', ''))
+      .filter(k => /^\d{4}-\d{2}-\d{2}$/.test(k))
+      .sort();
+    const start = keys.length ? new Date(keys[0] + 'T00:00:00') : new Date();
+    for (let d = new Date(start); d <= new Date(); d.setDate(d.getDate() + 1))
+      dateKeys.push(localDateKey(new Date(d)));
+  } else {
+    const days = DAYS[period];
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      dateKeys.push(localDateKey(d));
+    }
+  }
+
+  const lines = [`【食事ログ - ${LABEL[period]}】`, `目標: 糖質${goals.carb}g / ${goals.cal}kcal`, ''];
+
+  for (const key of dateKeys) {
+    const meals = getMeals(key);
+    if (!meals.length) continue;
+    const d = new Date(key + 'T00:00:00');
+    lines.push(`■ ${d.getMonth()+1}月${d.getDate()}日（${W[d.getDay()]}）`);
+    for (const m of meals) {
+      const protein = m.protein != null ? `・タンパク質${Math.round(m.protein)}g` : '';
+      lines.push(`  ${m.timing || '食事'}: ${m.name} (糖質${Math.round(m.carb||0)}g・${Math.round(m.cal||0)}kcal${protein})`);
+    }
+    const totCarb    = Math.round(meals.reduce((s, m) => s + (m.carb    || 0), 0));
+    const totCal     = Math.round(meals.reduce((s, m) => s + (m.cal     || 0), 0));
+    const totProtein = Math.round(meals.reduce((s, m) => s + (m.protein || 0), 0));
+    lines.push(`  合計: 糖質${totCarb}g / ${totCal}kcal / タンパク質${totProtein}g`);
+    lines.push('');
+  }
+
+  const text = lines.join('\n');
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('copy-log-btn');
+    btn.textContent = 'コピー済み ✓';
+    setTimeout(() => { btn.textContent = 'コピー'; }, 2000);
+  }).catch(() => {
+    alert('コピーできませんでした。');
+  });
+}
+
 function renderHistory(period) {
   const goals = getGoals();
   const dailyData = [];
@@ -1300,7 +1359,7 @@ function renderHistory(period) {
   const hdr  = document.getElementById('hist-list-hdr');
 
   if (period === 'week' || period === 'month') {
-    hdr.textContent = '日別ログ';
+    document.getElementById('hist-list-hdr-text').textContent = '日別ログ';
     list.innerHTML = [...dailyData].reverse().map(d => `
       <div class="hist-item" onclick="openHistModal('${d.key}')" style="cursor:pointer">
         <div class="hist-date">${d.date.getMonth()+1}/${d.date.getDate()}</div>
@@ -1311,7 +1370,7 @@ function renderHistory(period) {
     `).join('');
 
   } else if (period === '3month') {
-    hdr.textContent = '週別ログ';
+    document.getElementById('hist-list-hdr-text').textContent = '週別ログ';
     const weekBlocks = [];
     for (let i = 0; i < dailyData.length; i += 7)
       weekBlocks.push(dailyData.slice(i, Math.min(i + 7, dailyData.length)));
@@ -1344,7 +1403,7 @@ function renderHistory(period) {
 
   } else {
     // 全期間：月別グループ
-    hdr.textContent = '月別ログ';
+    document.getElementById('hist-list-hdr-text').textContent = '月別ログ';
     const monthMap = new Map();
     dailyData.forEach(d => {
       const mk = `${d.date.getFullYear()}-${String(d.date.getMonth()+1).padStart(2,'0')}`;
